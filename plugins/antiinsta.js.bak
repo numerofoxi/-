@@ -1,0 +1,63 @@
+//Crediti di Gabs
+
+let linkRegex = /instagram.com/i;
+
+export async function before(message, { isAdmin, groupMetadata, isBotAdmin }) {
+  const { text, isGroup, fromMe, sender, chat, key } = message;
+
+  if (fromMe || !isGroup) return true;
+
+  let chatData = global.db.data.chats[chat] || {};
+  let maxWarnings = 3;
+  let userId = sender;
+  let messageId = key.id;
+  let participantId = key.participant || sender;
+  let userWarnings = global.db.data.users[sender]?.warn || 0;
+
+  const isInstagramLink = linkRegex.test(text);
+  const warningText = '⚠ 𝐋𝐈𝐍𝐊 𝐈𝐍𝐒𝐓𝐀𝐆𝐑𝐀𝐌 𝐍𝐎𝐍 𝐒𝐎𝐍𝐎 𝐂𝐎𝐍𝐒𝐄𝐍𝐓𝐈𝐓𝐈';
+
+  // If admin sends Instagram links, skip checks
+  if (isAdmin && chatData.antiinsta && text.includes("instagram.com")) return;
+
+  // If anti-instagram is enabled and an Instagram link is detected
+  if (chatData.antiinsta && isInstagramLink && !isAdmin && isBotAdmin) {
+    global.db.data.users[sender].warn = userWarnings + 1;
+
+    // Delete message
+    await conn.sendMessage(chat, {
+      delete: {
+        remoteJid: chat,
+        fromMe: false,
+        id: messageId,
+        participant: participantId,
+      },
+    });
+
+    if (userWarnings < maxWarnings - 1) {
+      // Send warning
+      let warningPayload = {
+        key: {
+          participant: '0@s.whatsapp.net',
+          fromMe: false,
+          id: 'Halo',
+        },
+        message: {
+          locationMessage: {
+            name: '𝐀𝐧𝐭𝐢 - 𝐈𝐧𝐬𝐭𝐚',
+            jpegThumbnail: await (await fetch('https://telegra.ph/file/e12aae9f5ea6c2e5e52aa.png')).buffer(),
+          },
+        },
+      };
+
+      await conn.sendMessage(chat, `${warningText}\n*${userWarnings + 1}* °𝐀𝐕𝐕𝐄𝐑𝐓𝐈𝐌𝐄𝐍𝐓𝐎`, warningPayload);
+    } else {
+      // Reset warnings and remove user
+      global.db.data.users[sender].warn = 0;
+      await conn.sendMessage(chat, '⛔ 𝐔𝐓𝐄𝐍𝐓𝐄 𝐑𝐈𝐌𝐎𝐒𝐒𝐎 𝐃𝐎𝐏𝐎 𝟑 𝐀𝐕𝐕𝐄𝐑𝐓𝐈𝐌𝐄𝐍𝐓𝐈');
+      await conn.groupParticipantsUpdate(chat, [sender], 'remove');
+    }
+  }
+
+  return true;
+}
